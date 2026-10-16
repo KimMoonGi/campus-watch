@@ -34,11 +34,13 @@ def fetch_text(url):
 
 
 def relevant_snippets(text):
-    low = text.lower()
+    """Sentence-sized chunks that mention a Christmas-campus keyword."""
+    chunks = re.split(r"(?<=[.!?])\s+|\s{2,}|\s[|·•]\s", text)
     out = []
-    for kw in KEYWORDS:
-        for m in re.finditer(kw, low):
-            out.append(text[max(0, m.start() - 150): m.end() + 250])
+    for c in chunks:
+        c = c.strip()[:300]
+        if c and any(kw in c.lower() for kw in KEYWORDS) and c not in out:
+            out.append(c)
     return out
 
 
@@ -62,8 +64,9 @@ def main():
             state = json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
         state = {}
-    first_run = "pages" not in state
-    pages = state.setdefault("pages", {})
+    first_run = "pages" not in state and "seen" not in state
+    state.pop("pages", None)  # old hash-based format
+    seen_all = state.setdefault("seen", {})
 
     for name, url in URLS.items():
         try:
@@ -71,17 +74,25 @@ def main():
         except Exception as e:  # site down or blocked: try again next run
             print(f"[{name}] fetch failed: {e}")
             continue
-        joined = " | ".join(snippets)
-        digest = hashlib.sha256(joined.encode("utf-8")).hexdigest()
-        old = pages.get(name)
-        pages[name] = digest
-        if first_run or old is None or old == digest:
+        # Remember every snippet ever seen, so rotating banners or reordered
+        # blocks don't re-trigger; alert only on genuinely new text.
+        seen = seen_all.get(name)
+        current = {hashlib.sha256(s.encode("utf-8")).hexdigest()[:16]: s for s in snippets}
+        if seen is None:
+            seen_all[name] = sorted(current)
+            print(f"[{name}] baseline saved ({len(current)} snippets)")
+            continue
+        new = [s for h, s in current.items() if h not in seen]
+        seen_all[name] = sorted(set(seen) | set(current))[-500:]
+        if not new:
             print(f"[{name}] no change")
             continue
-        if any(s in joined.lower() for s in SIGNALS):
-            preview = (snippets[0] if snippets else "")[:300]
+        for s in new:
+            print(f"[{name}] NEW: {s}")
+        hits = [s for s in new if any(sig in s.lower() for sig in SIGNALS)]
+        if hits:
             push("Atleti campus update - check now!",
-                 f"[{name}] Christmas campus page changed.\n{preview}", url)
+                 f"[{name}] New Christmas campus text:\n{hits[0][:300]}", url)
             print(f"[{name}] CHANGED -> pushed")
 
     if first_run:
