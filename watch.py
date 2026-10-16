@@ -14,9 +14,14 @@ import urllib.request
 from datetime import datetime, timezone
 
 URLS = {
+    # Madrid campus site (official, has the "Navidad 2026" section)
+    "madrid-home": "https://madrid.campusatleticodemadrid.com/",
+    "madrid-majadahonda": "https://madrid.campusatleticodemadrid.com/generation-majadahonda/",
+    "madrid-majadahonda-venue": "https://madrid.campusatleticodemadrid.com/centro-deportivo-deportivo-majadahonda/",
+    "madrid-alcala": "https://madrid.campusatleticodemadrid.com/generation-alcala-de-henares/",
+    # Global hub and the club's own Majadahonda page (secondary)
     "campus-site": "https://campusatleticodemadrid.com/",
     "majadahonda": "https://www.atleticodemadrid.com/atm/ciudad-deportiva-wanda-de-majadahonda",
-    "alcala": "https://www.atleticodemadrid.com/atm/centro-deportivo-wanda-alcala-de-henares",
 }
 KEYWORDS = ("navidad", "christmas", "clinic")
 SIGNALS = ("2026", "diciembre", "december", "inscripci", "registration")
