@@ -22,7 +22,7 @@ jobs:
         env:
           NTFY_TOPIC: ""
           DEBUG: "1"
-        run: python3 watch.py
+        run: python3 probe.py
         # DEBUG: set to 1 to print page text in the log
       - name: Save state
         run: |
