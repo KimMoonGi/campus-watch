@@ -1,7 +1,12 @@
 {
-  "pages": {
-    "campus-site": "2f0d5319417a3102bc00c046593c3cc796fd4a55e9b047f56d2bf40fe6ec8f62",
-    "majadahonda": "d1ab71ddfbef4954abb7b680faa8364ae672b6a70519109f67c732cafe2e493d"
+  "seen": {
+    "campus-site": [
+      "6ea7026794a2f741"
+    ],
+    "majadahonda": [
+      "0e5fa6947b1458b0",
+      "6420f4b5aab9bbdb"
+    ]
   },
   "week": "2026-W42"
 }
