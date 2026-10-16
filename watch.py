@@ -75,7 +75,7 @@ def main():
         digest = hashlib.sha256(joined.encode("utf-8")).hexdigest()
         old = pages.get(name)
         pages[name] = digest
-        if first_run or old == digest:
+        if first_run or old is None or old == digest:
             print(f"[{name}] no change")
             continue
         if any(s in joined.lower() for s in SIGNALS):
