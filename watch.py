@@ -10,6 +10,7 @@ import json
 import os
 import re
 import sys
+import time
 import urllib.request
 from datetime import datetime, timezone
 
@@ -31,13 +32,24 @@ STATE_FILE = "state.json"
 TOPIC = os.environ.get("NTFY_TOPIC", "")
 
 
-def fetch_text(url):
-    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 campus-watch"})
-    with urllib.request.urlopen(req, timeout=30) as r:
-        raw = r.read().decode("utf-8", errors="ignore")
-    raw = re.sub(r"(?is)<(script|style|noscript)[^>]*>.*?</\1>", " ", raw)
-    text = html.unescape(re.sub(r"(?s)<[^>]+>", " ", raw))
-    return re.sub(r"\s+", " ", text).strip()
+def fetch_text(url, tries=3):
+    """Page text with scripts/styles/tags removed. Retries empty responses."""
+    last = None
+    for attempt in range(tries):
+        req = urllib.request.Request(url, headers={
+            "User-Agent": "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 "
+                          "(KHTML, like Gecko) Chrome/129.0 Mobile Safari/537.36",
+            "Accept": "text/html", "Accept-Language": "es-ES,es;q=0.9"})
+        with urllib.request.urlopen(req, timeout=30) as r:
+            raw = r.read().decode("utf-8", errors="ignore")
+        raw = re.sub(r"(?is)<(script|style|noscript)[^>]*>.*?</\1>", " ", raw)
+        text = html.unescape(re.sub(r"(?s)<[^>]+>", " ", raw))
+        text = re.sub(r"\s+", " ", text).strip()
+        if len(text) >= 200:
+            return text
+        last = len(text)
+        time.sleep(5 * (attempt + 1))
+    raise RuntimeError(f"page came back empty ({last} chars)")
 
 
 def relevant_snippets(text):
@@ -72,10 +84,11 @@ def main():
             state = json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
         state = {}
-    first_run = not ({"pages", "seen", "seen_v2"} & state.keys())
+    first_run = not ({"pages", "seen", "seen_v2", "seen_v3"} & state.keys())
     state.pop("pages", None)  # old hash-based format
-    state.pop("seen", None)  # v1 snippet format
-    seen_all = state.setdefault("seen_v2", {})
+    for old_key in ("seen", "seen_v2"):  # earlier formats
+        state.pop(old_key, None)
+    seen_all = state.setdefault("seen_v3", {})
 
     for name, url in URLS.items():
         try:
