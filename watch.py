@@ -20,6 +20,8 @@ URLS = {
 }
 KEYWORDS = ("navidad", "christmas", "clinic")
 SIGNALS = ("2026", "diciembre", "december", "inscripci", "registration")
+# other-city campuses rotate through the site banner; ignore them
+OTHER_CITIES = ("marbella", "bogot", "colombia", "lima", "per\u00fa", "peru", "miami", "dublin", "m\u00e9xico", "mexico")
 STATE_FILE = "state.json"
 TOPIC = os.environ.get("NTFY_TOPIC", "")
 
@@ -34,13 +36,14 @@ def fetch_text(url):
 
 
 def relevant_snippets(text):
-    """Sentence-sized chunks that mention a Christmas-campus keyword."""
-    chunks = re.split(r"(?<=[.!?])\s+|\s{2,}|\s[|·•]\s", text)
+    """Short windows of text around each Christmas-campus keyword."""
+    low = text.lower()
     out = []
-    for c in chunks:
-        c = c.strip()[:300]
-        if c and any(kw in c.lower() for kw in KEYWORDS) and c not in out:
-            out.append(c)
+    for kw in KEYWORDS:
+        for m in re.finditer(kw, low):
+            w = text[max(0, m.start() - 80): m.end() + 120].strip()
+            if w not in out:
+                out.append(w)
     return out
 
 
@@ -64,9 +67,10 @@ def main():
             state = json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
         state = {}
-    first_run = "pages" not in state and "seen" not in state
+    first_run = not ({"pages", "seen", "seen_v2"} & state.keys())
     state.pop("pages", None)  # old hash-based format
-    seen_all = state.setdefault("seen", {})
+    state.pop("seen", None)  # v1 snippet format
+    seen_all = state.setdefault("seen_v2", {})
 
     for name, url in URLS.items():
         try:
@@ -89,7 +93,8 @@ def main():
             continue
         for s in new:
             print(f"[{name}] NEW: {s}")
-        hits = [s for s in new if any(sig in s.lower() for sig in SIGNALS)]
+        hits = [s for s in new if any(sig in s.lower() for sig in SIGNALS)
+                and not any(c in s.lower() for c in OTHER_CITIES)]
         if hits:
             push("Atleti campus update - check now!",
                  f"[{name}] New Christmas campus text:\n{hits[0][:300]}", url)
