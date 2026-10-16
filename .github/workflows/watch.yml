@@ -22,6 +22,7 @@ jobs:
         env:
           NTFY_TOPIC: haeden-atleti-c1a36d
         run: python3 watch.py
+        # DEBUG: set to 1 to print page text in the log
       - name: Save state
         run: |
           git config user.name "campus-watch"

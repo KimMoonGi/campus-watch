@@ -79,7 +79,12 @@ def main():
 
     for name, url in URLS.items():
         try:
-            snippets = relevant_snippets(fetch_text(url))
+            text = fetch_text(url)
+            snippets = relevant_snippets(text)
+            if os.environ.get("DEBUG"):
+                print(f"[{name}] DEBUG len={len(text)} head={text[:300]!r}")
+                i = text.lower().find("navidad")
+                print(f"[{name}] DEBUG navidad_at={i} ctx={text[max(0,i-100):i+150]!r}")
         except Exception as e:  # site down or blocked: try again next run
             print(f"[{name}] fetch failed: {e}")
             continue
