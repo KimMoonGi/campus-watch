@@ -1,47 +1,13 @@
 {
-  "seen_v3": {
-    "campus-site": [
-      "29411b03d714de1a",
-      "3896cc7fbf3380e9",
-      "39b4d388a3666644",
-      "8adc68f1ed2eb2d1",
-      "99c8659180cba8b9",
-      "b377fb48c028d957",
-      "b46aaf3ac86047eb",
-      "e2914b066453ca61",
-      "f1e7f09038f493d9"
-    ],
-    "madrid-alcala": [
-      "59eccb386408e92b"
-    ],
-    "madrid-home": [
-      "3601b898e3f6fb73",
-      "5a480e08808ca43d",
-      "c7481a2d878bc1e8"
-    ],
-    "madrid-majadahonda": [
-      "32fa8d3a177e63a0"
-    ],
-    "madrid-majadahonda-venue": [
-      "85aff3c744213b9f"
-    ],
-    "majadahonda": [
-      "2ab1bb14af8a6140",
-      "3326f22db20b01ee",
-      "3497a875e382f963",
-      "3951cec3b03dfb69",
-      "7dab33ad01a80826",
-      "7ec0f27cacd22e4a",
-      "7f53693a26900c0a",
-      "a271b74bb2cfec97",
-      "aa5870b10f59c8c4",
-      "b37e2cab41b69746",
-      "c44b4efda90f55eb",
-      "cbe151c65b954a1c",
-      "de7e91ceb4c6f9c3",
-      "fcd785b6024cd111",
-      "ff75e53135b9b673"
-    ]
-  },
+  "history": [
+    {
+      "at": "2026-10-30 09:49 UTC",
+      "detail": "added to cart",
+      "status": "open"
+    }
+  ],
+  "last_check": "2026-10-30 09:49 UTC",
+  "last_open": "2026-10-30 09:49 UTC",
+  "status": "open",
   "week": "2026-W44"
 }
