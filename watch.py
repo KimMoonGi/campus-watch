@@ -1,77 +1,66 @@
-"""Atlético de Madrid Christmas campus watcher.
+"""Atlético de Madrid Christmas campus: sold-out watcher (Majadahonda).
 
-Runs every 5 minutes on GitHub Actions. Fetches the campus pages, pulls out
-the text around Christmas-campus keywords, and sends a phone push via ntfy
-when that text changes and mentions 2026 / December.
+Hayden is already registered, so this no longer watches for new campus
+text. It only answers one question: when does the Majadahonda Generation
+Christmas campus (28-31 Dec, half day, 6-11) fill up?
+
+Every few hours it adds that campus to a fresh, throwaway cart on the
+official shop and reads the cart page. If the item lands in the cart, places
+are still open. If the shop refuses it (error notice / empty cart), the
+campus is full. A phone push via ntfy is sent only when that status changes.
 """
-import hashlib
 import html
+import http.cookiejar
 import json
 import os
 import re
 import sys
-import time
 import urllib.request
 from datetime import datetime, timezone
 
-URLS = {
-    # Madrid campus site (official, has the "Navidad 2026" section)
-    "madrid-home": "https://madrid.campusatleticodemadrid.com/",
-    "madrid-majadahonda": "https://madrid.campusatleticodemadrid.com/generation-majadahonda/",
-    "madrid-majadahonda-venue": "https://madrid.campusatleticodemadrid.com/centro-deportivo-deportivo-majadahonda/",
-    "madrid-alcala": "https://madrid.campusatleticodemadrid.com/generation-alcala-de-henares/",
-    # Global hub and the club's own Majadahonda page (secondary)
-    "campus-site": "https://campusatleticodemadrid.com/",
-    "majadahonda": "https://www.atleticodemadrid.com/atm/ciudad-deportiva-wanda-de-majadahonda",
-}
-KEYWORDS = ("navidad", "christmas", "clinic")
-SIGNALS = ("2026", "diciembre", "december", "inscripci", "registration")
-# other-city campuses rotate through the site banner; ignore them
-OTHER_CITIES = ("marbella", "bogot", "colombia", "lima", "per\u00fa", "peru", "miami", "dublin", "m\u00e9xico", "mexico")
+ADD_URL = (
+    "https://madrid.campusatleticodemadrid.com/?wre-add-to-cart=152&quantity=1"
+    "&attribute_pa_program_modality=media-jornada"
+    "&attribute_pa_program_location=majadahonda"
+    "&attribute_pa_program_group=general"
+    "&attribute_pa_program_week=diciembre-28-31"
+    "&attribute_pa_program_age=6-a-11"
+)
+PAGE_URL = "https://madrid.campusatleticodemadrid.com/campus-navidad/"
 STATE_FILE = "state.json"
 TOPIC = os.environ.get("NTFY_TOPIC", "")
+UA = ("Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 "
+      "(KHTML, like Gecko) Chrome/129.0 Mobile Safari/537.36")
 
 
-def fetch_text(url, tries=3):
-    """Page text with scripts/styles/tags removed. Retries empty responses."""
-    last = None
-    for attempt in range(tries):
-        req = urllib.request.Request(url, headers={
-            "User-Agent": "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 "
-                          "(KHTML, like Gecko) Chrome/129.0 Mobile Safari/537.36",
-            "Accept": "text/html", "Accept-Language": "es-ES,es;q=0.9"})
-        with urllib.request.urlopen(req, timeout=30) as r:
-            raw = r.read().decode("utf-8", errors="ignore")
-        raw = re.sub(r"(?is)<(script|style|noscript)[^>]*>.*?</\1>", " ", raw)
-        text = html.unescape(re.sub(r"(?s)<[^>]+>", " ", raw))
-        text = re.sub(r"\s+", " ", text).strip()
-        if len(text) >= 200:
-            return text
-        last = len(text)
-        time.sleep(5 * (attempt + 1))
-    raise RuntimeError(f"page came back empty ({last} chars)")
+def check():
+    """Return (status, detail): status is 'open', 'full' or 'unknown'."""
+    jar = http.cookiejar.CookieJar()
+    opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
+    req = urllib.request.Request(ADD_URL, headers={
+        "User-Agent": UA, "Accept": "text/html", "Accept-Language": "es-ES,es;q=0.9"})
+    with opener.open(req, timeout=40) as r:
+        raw = r.read().decode("utf-8", errors="ignore")
+    notices = [re.sub(r"<[^>]+>|\s+", " ", html.unescape(m)).strip()
+               for m in re.findall(r'woocommerce-error[^>]*>(.*?)</(?:ul|div)>', raw, re.S)]
+    text = re.sub(r"(?is)<(script|style)[^>]*>.*?</\1>", " ", raw)
+    text = re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", text)))
+    in_cart = "Location: Majadahonda" in text or "Localidad: Majadahonda" in text
+    if in_cart and not notices:
+        return "open", "added to cart"
+    if notices:
+        return "full", notices[0][:200]
+    if re.search(r"carrito est[aá] vac[ií]o|agotad|completo|sin plazas|no quedan", text, re.I):
+        return "full", "cart empty / sold-out wording"
+    return "unknown", text[:200]
 
 
-def relevant_snippets(text):
-    """Short windows of text around each Christmas-campus keyword."""
-    low = text.lower()
-    out = []
-    for kw in KEYWORDS:
-        for m in re.finditer(kw, low):
-            w = text[max(0, m.start() - 80): m.end() + 120].strip()
-            if w not in out:
-                out.append(w)
-    return out
-
-
-def push(title, message, url=None, priority=5):
+def push(title, message, priority=5):
     if not TOPIC:
         print("NTFY_TOPIC not set; skipping push:", title)
         return
     body = {"topic": TOPIC, "title": title, "message": message,
-            "priority": priority, "tags": ["soccer"]}
-    if url:
-        body["click"] = url
+            "priority": priority, "tags": ["soccer"], "click": PAGE_URL}
     req = urllib.request.Request(
         "https://ntfy.sh", data=json.dumps(body).encode("utf-8"),
         headers={"Content-Type": "application/json"}, method="POST")
@@ -84,51 +73,34 @@ def main():
             state = json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
         state = {}
-    first_run = not ({"pages", "seen", "seen_v2", "seen_v3"} & state.keys())
-    state.pop("pages", None)  # old hash-based format
-    for old_key in ("seen", "seen_v2"):  # earlier formats
-        state.pop(old_key, None)
-    seen_all = state.setdefault("seen_v3", {})
+    for old in ("pages", "seen", "seen_v2", "seen_v3"):  # old text-watch formats
+        state.pop(old, None)
+    now = datetime.now(timezone.utc)
+    kst = now.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
-    for name, url in URLS.items():
-        try:
-            text = fetch_text(url)
-            snippets = relevant_snippets(text)
-            if os.environ.get("DEBUG"):
-                print(f"[{name}] DEBUG len={len(text)} head={text[:300]!r}")
-                i = text.lower().find("navidad")
-                print(f"[{name}] DEBUG navidad_at={i} ctx={text[max(0,i-100):i+150]!r}")
-        except Exception as e:  # site down or blocked: try again next run
-            print(f"[{name}] fetch failed: {e}")
-            continue
-        # Remember every snippet ever seen, so rotating banners or reordered
-        # blocks don't re-trigger; alert only on genuinely new text.
-        seen = seen_all.get(name)
-        current = {hashlib.sha256(s.encode("utf-8")).hexdigest()[:16]: s for s in snippets}
-        if seen is None:
-            seen_all[name] = sorted(current)
-            print(f"[{name}] baseline saved ({len(current)} snippets)")
-            continue
-        new = [s for h, s in current.items() if h not in seen]
-        seen_all[name] = sorted(set(seen) | set(current))[-500:]
-        if not new:
-            print(f"[{name}] no change")
-            continue
-        for s in new:
-            print(f"[{name}] NEW: {s}")
-        hits = [s for s in new if any(sig in s.lower() for sig in SIGNALS)
-                and not any(c in s.lower() for c in OTHER_CITIES)]
-        if hits:
-            push("Atleti campus update - check now!",
-                 f"[{name}] New Christmas campus text:\n{hits[0][:300]}", url)
-            print(f"[{name}] CHANGED -> pushed")
+    try:
+        status, detail = check()
+    except Exception as e:  # site down: try again next run
+        print("check failed:", e)
+        status, detail = "unknown", str(e)[:200]
+    print(f"[majadahonda-xmas] {status}: {detail}")
 
-    if first_run:
-        push("campus-watch started",
-             "Monitoring Atletico Christmas campus pages every ~5 min.", priority=3)
-
+    prev = state.get("status")
+    if status in ("open", "full"):
+        if status != prev:
+            state.setdefault("history", []).append({"at": kst, "status": status, "detail": detail})
+            if prev == "open" and status == "full":
+                push("Majadahonda Christmas campus is FULL",
+                     f"Sold out detected at {kst} (last seen open: {state.get('last_open', '?')}). {detail}")
+            elif prev == "full" and status == "open":
+                push("Majadahonda Christmas campus has places again",
+                     f"Places reopened at {kst}.", priority=3)
+        state["status"] = status
+        if status == "open":
+            state["last_open"] = kst
+    state["last_check"] = kst
     # weekly keepalive so GitHub doesn't pause the schedule after 60 idle days
-    state["week"] = datetime.now(timezone.utc).strftime("%G-W%V")
+    state["week"] = now.strftime("%G-W%V")
     with open(STATE_FILE, "w", encoding="utf-8") as f:
         json.dump(state, f, indent=2, sort_keys=True)
 
